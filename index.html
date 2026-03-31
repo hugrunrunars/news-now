@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fréttir — News, Simplified</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    .shimmer {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 400% 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+    .card-enter { animation: cardIn 0.35s ease both; }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .tag-bar::-webkit-scrollbar { display: none; }
+    .tag-bar { -ms-overflow-style: none; scrollbar-width: none; }
+    .modal-body::-webkit-scrollbar { width: 5px; }
+    .modal-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+    .lc3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .lc4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    /* ─────────────────────────── CONFIG ─────────────────────────────── */
+
+    const LS = {
+      G_KEY:  'frettir_gkey',
+      AI_KEY: 'frettir_akey',
+      TAGS:   'frettir_tags',
+      ACTIVE: 'frettir_active',
+      CACHE:  'frettir_cache',
+    };
+
+    const PRESET_TAGS = [];
+
+    const COLOR_POOL = ['blue','violet','emerald','amber','cyan','rose','red','orange','teal','indigo','pink','lime'];
+
+    /* Tailwind classes per color — must be full strings so Tailwind CDN picks them up */
+    const C = {
+      blue:    { chip: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',     active: 'bg-blue-600 text-white shadow-sm'    },
+      violet:  { chip: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200', active: 'bg-violet-600 text-white shadow-sm' },
+      emerald: { chip: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', active: 'bg-emerald-600 text-white shadow-sm'},
+      amber:   { chip: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200',  active: 'bg-amber-500 text-white shadow-sm'  },
+      cyan:    { chip: 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200',     active: 'bg-cyan-600 text-white shadow-sm'   },
+      rose:    { chip: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200',     active: 'bg-rose-600 text-white shadow-sm'   },
+      red:     { chip: 'bg-red-50 text-red-700 ring-1 ring-red-200',       active: 'bg-red-600 text-white shadow-sm'    },
+      orange:  { chip: 'bg-orange-50 text-orange-700 ring-1 ring-orange-200', active: 'bg-orange-500 text-white shadow-sm'},
+      teal:    { chip: 'bg-teal-50 text-teal-700 ring-1 ring-teal-200',    active: 'bg-teal-600 text-white shadow-sm'   },
+      indigo:  { chip: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200', active: 'bg-indigo-600 text-white shadow-sm'},
+      pink:    { chip: 'bg-pink-50 text-pink-700 ring-1 ring-pink-200',    active: 'bg-pink-600 text-white shadow-sm'   },
+      lime:    { chip: 'bg-lime-50 text-lime-700 ring-1 ring-lime-200',    active: 'bg-lime-600 text-white shadow-sm'   },
+    };
+
+    /* ─────────────────────────── HELPERS ────────────────────────────── */
+
+    const stripHtml = html => {
+      const el = document.createElement('div');
+      el.innerHTML = html;
+      return (el.textContent || el.innerText || '').replace(/\s+/g, ' ').trim();
+    };
+
+    const ago = d => {
+      const h = Math.floor((Date.now() - new Date(d)) / 3.6e6);
+      if (h < 1)  return 'Just now';
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    };
+
+    const getCache = () => { try { return JSON.parse(localStorage.getItem(LS.CACHE) || '{}'); } catch { return {}; } };
+    const putCache = (id, val) => {
+      const c = getCache();
+      c[id] = val;
+      const keys = Object.keys(c);
+      if (keys.length > 400) keys.slice(0, keys.length - 400).forEach(k => delete c[k]);
+      localStorage.setItem(LS.CACHE, JSON.stringify(c));
+    };
+
+    /* ─────────────────────────── API ────────────────────────────────── */
+
+    async function fetchTag(tag, gKey) {
+      const fields = 'trailText,body';
+      const base   = 'https://content.guardianapis.com/search';
+      const params = tag.section
+        ? `section=${tag.section}&show-fields=${fields}&page-size=12&order-by=newest&api-key=${gKey}`
+        : `q=${encodeURIComponent(tag.query || tag.name)}&show-fields=${fields}&page-size=12&order-by=newest&api-key=${gKey}`;
+
+      const res = await fetch(`${base}?${params}`);
+      if (!res.ok) throw new Error(`Guardian API returned ${res.status} — check your API key.`);
+      const { response } = await res.json();
+
+      return (response.results || []).map(r => ({
+        id:        r.id,
+        title:     r.webTitle,
+        trail:     stripHtml(r.fields?.trailText || ''),
+        body:      stripHtml(r.fields?.body || '').slice(0, 3500),
+        section:   r.sectionName,
+        published: r.webPublicationDate,
+        url:       r.webUrl,
+        tagId:     tag.id,
+        tagName:   tag.name,
+        tagColor:  tag.color,
+        status:    'pending',
+        summary:   null,
+        full:      null,
+      }));
+    }
+
+    async function rewriteArticle(article, aiKey) {
+      const cached = getCache()[article.id];
+      if (cached) return cached;
+
+      const prompt = `You are a news translator and simplifier. Translate and rewrite the following news article into simple, clear Icelandic (íslenska).
+
+Rules:
+- Write EVERYTHING in Icelandic — no English words at all
+- Use short sentences (max 18 words each)
+- No jargon or technical language
+- Explain complex ideas in plain words
+- Be accurate and factual
+
+Respond in EXACTLY this format with no extra text:
+TITILL: [Translated title in Icelandic]
+SAMANTEKT: [2-3 sentences summarising the key point, in Icelandic]
+HEILD: [Full article rewritten simply in Icelandic, 150-220 words]
+
+Title: ${article.title}
+Text: ${article.body || article.trail}`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 650 },
+          }),
+        }
+      );
+      if (!res.ok) throw new Error(`Gemini API returned ${res.status}`);
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      const tm = text.match(/TITILL:\s*([\s\S]*?)(?=SAMANTEKT:|$)/i);
+      const sm = text.match(/SAMANTEKT:\s*([\s\S]*?)(?=HEILD:|$)/i);
+      const fm = text.match(/HEILD:\s*([\s\S]*?)$/i);
+      const result = {
+        titleIS:  tm?.[1]?.trim() || article.title,
+        summary:  sm?.[1]?.trim() || article.trail,
+        full:     fm?.[1]?.trim() || text.trim(),
+      };
+      putCache(article.id, result);
+      return result;
+    }
+
+    /* ─────────────────────────── SETUP SCREEN ───────────────────────── */
+
+    function SetupScreen({ onDone }) {
+      const [gKey,    setGKey]    = useState('');
+      const [aiKey,   setAiKey]   = useState('');
+      const [loading, setLoading] = useState(false);
+      const [err,     setErr]     = useState('');
+
+      const submit = async () => {
+        if (!gKey.trim() || !aiKey.trim()) return;
+        setLoading(true); setErr('');
+        try {
+          const r = await fetch(`https://content.guardianapis.com/search?api-key=${gKey.trim()}&page-size=1`);
+          if (!r.ok) { setErr('Guardian API key looks wrong. Try again.'); setLoading(false); return; }
+        } catch {
+          setErr('Could not reach the Guardian API. Check your internet connection.'); setLoading(false); return;
+        }
+        localStorage.setItem(LS.G_KEY,  gKey.trim());
+        localStorage.setItem(LS.AI_KEY, aiKey.trim());
+        onDone();
+      };
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur mb-4 text-3xl">📰</div>
+              <h1 className="text-4xl font-extrabold text-white tracking-tight">Fréttir</h1>
+              <p className="text-slate-400 mt-2 text-sm">Your personal news, simplified</p>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-2xl space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Guardian API Key</label>
+                <input
+                  type="password" value={gKey} onChange={e => setGKey(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && submit()}
+                  placeholder="Paste your key here"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+                />
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Free key →{' '}
+                  <a href="https://open-platform.theguardian.com/access/" target="_blank" className="text-blue-500 hover:underline">
+                    open-platform.theguardian.com
+                  </a>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Gemini API Key</label>
+                <input
+                  type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && submit()}
+                  placeholder="Paste your key here"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+                />
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Free key →{' '}
+                  <a href="https://aistudio.google.com/apikey" target="_blank" className="text-blue-500 hover:underline">
+                    aistudio.google.com
+                  </a>
+                </p>
+              </div>
+
+              {err && (
+                <div className="bg-red-50 text-red-600 text-xs rounded-xl px-4 py-2.5 border border-red-100">{err}</div>
+              )}
+
+              <button
+                onClick={submit} disabled={!gKey || !aiKey || loading}
+                className="w-full bg-slate-900 hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold py-3 rounded-xl transition text-sm"
+              >
+                {loading ? 'Checking keys…' : 'Start reading →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── TAG PILL ───────────────────────────── */
+
+    function TagPill({ tag, active, onClick, onRemove }) {
+      const style = C[tag.color] || C.blue;
+      return (
+        <div className="shrink-0 group flex items-center gap-0.5">
+          <button
+            onClick={onClick}
+            className={`text-sm font-semibold px-3.5 py-1.5 rounded-full transition-all ${
+              active ? style.active : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            {tag.name}
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onRemove(tag.id); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-400 w-4 h-4 flex items-center justify-center rounded-full text-xs leading-none"
+            title="Remove tag"
+          >
+            ✕
+          </button>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── SKELETON ───────────────────────────── */
+
+    function Skeleton() {
+      return (
+        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="shimmer h-5 w-20 rounded-full" />
+          <div className="space-y-2">
+            <div className="shimmer h-4 w-full rounded-lg" />
+            <div className="shimmer h-4 w-4/5 rounded-lg" />
+          </div>
+          <div className="space-y-1.5 pt-1">
+            <div className="shimmer h-3.5 w-full rounded" />
+            <div className="shimmer h-3.5 w-full rounded" />
+            <div className="shimmer h-3.5 w-3/4 rounded" />
+          </div>
+          <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+            <div className="shimmer h-3 w-20 rounded" />
+            <div className="shimmer h-8 w-24 rounded-xl" />
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── NEWS CARD ──────────────────────────── */
+
+    function Card({ article, tags, onOpen }) {
+      const tag    = tags.find(t => t.id === article.tagId) || { color: 'blue', name: article.tagName };
+      const style  = C[tag.color] || C.blue;
+      const isWaiting = article.status === 'pending' || article.status === 'loading';
+      const text   = article.summary || article.trail;
+
+      return (
+        <div className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col card-enter">
+          {/* Top row */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${style.chip}`}>{article.tagName}</span>
+            {article.section && (
+              <span className="text-xs text-slate-400 truncate max-w-[120px]">{article.section}</span>
+            )}
+          </div>
+
+          {/* Headline */}
+          <h2 className="font-semibold text-slate-900 text-sm leading-snug mb-3 lc3">{article.titleIS || article.title}</h2>
+
+          {/* Summary or shimmer */}
+          <div className="flex-1 min-h-[56px] mb-4">
+            {isWaiting ? (
+              <div className="space-y-1.5">
+                <div className="shimmer h-3.5 w-full rounded" />
+                <div className="shimmer h-3.5 w-full rounded" />
+                <div className="shimmer h-3.5 w-3/4 rounded" />
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm leading-relaxed lc4">{text}</p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <span className="text-xs text-slate-400">{ago(article.published)}</span>
+            <button
+              onClick={() => onOpen(article)}
+              className="text-xs font-bold bg-slate-900 hover:bg-slate-700 text-white px-3.5 py-1.5 rounded-xl transition"
+            >
+              Read more
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── ARTICLE MODAL ──────────────────────── */
+
+    function ArticleModal({ article, onClose }) {
+      const isWaiting = article.status === 'pending' || article.status === 'loading';
+      const content   = article.full || article.summary || article.trail;
+
+      useEffect(() => {
+        const onKey = e => { if (e.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, []);
+
+      return (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={e => e.target === e.currentTarget && onClose()}
+        >
+          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 flex-wrap">
+                <span className="font-semibold text-slate-600">The Guardian</span>
+                {article.section && <><span>·</span><span>{article.section}</span></>}
+                <span>·</span>
+                <span>{ago(article.published)}</span>
+              </div>
+              <button onClick={onClose} className="text-slate-300 hover:text-slate-500 transition ml-3 shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal body */}
+            <div className="flex-1 overflow-y-auto modal-body px-5 py-5">
+              <h2 className="font-extrabold text-xl text-slate-900 leading-snug mb-5">{article.titleIS || article.title}</h2>
+              {isWaiting ? (
+                <div className="space-y-2">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className={`shimmer h-4 rounded ${i % 3 === 2 ? 'w-2/3' : 'w-full'}`} />
+                  ))}
+                  <p className="text-xs text-slate-400 mt-3 text-center">Simplifying article…</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {content.split('\n').filter(p => p.trim()).map((p, i) => (
+                    <p key={i} className="text-slate-600 text-sm leading-relaxed">{p}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 rounded-b-2xl">
+              <p className="text-xs text-slate-400">Simplified by AI · original may differ</p>
+              <a
+                href={article.url} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition"
+              >
+                Read original
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── SETTINGS MODAL ─────────────────────── */
+
+    function SettingsModal({ onClose, onRefresh }) {
+      const [gKey,    setGKey]    = useState(localStorage.getItem(LS.G_KEY)  || '');
+      const [aiKey,   setAiKey]   = useState(localStorage.getItem(LS.AI_KEY) || '');
+      const [cleared, setCleared] = useState(false);
+
+      const save = () => {
+        localStorage.setItem(LS.G_KEY,  gKey);
+        localStorage.setItem(LS.AI_KEY, aiKey);
+        onRefresh();
+        onClose();
+      };
+
+      const clearCache = () => {
+        localStorage.removeItem(LS.CACHE);
+        setCleared(true);
+        setTimeout(() => setCleared(false), 2000);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900">Settings</h2>
+              <button onClick={onClose} className="text-slate-300 hover:text-slate-500 transition">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Guardian Key</label>
+                <input
+                  type="password" value={gKey} onChange={e => setGKey(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Gemini Key</label>
+                <input
+                  type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={clearCache}
+                  className="flex-1 text-sm border border-slate-200 text-slate-600 py-2.5 rounded-xl hover:bg-slate-50 font-medium transition"
+                >
+                  {cleared ? '✓ Cleared!' : 'Clear article cache'}
+                </button>
+                <button
+                  onClick={save}
+                  className="flex-1 text-sm bg-slate-900 hover:bg-slate-700 text-white py-2.5 rounded-xl font-bold transition"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────── MAIN APP ───────────────────────────── */
+
+    function App() {
+      const [ready, setReady] = useState(
+        !!(localStorage.getItem(LS.G_KEY) && localStorage.getItem(LS.AI_KEY))
+      );
+      const [tags, setTags] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(LS.TAGS)) || PRESET_TAGS; }
+        catch { return PRESET_TAGS; }
+      });
+      const [active, setActive] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(LS.ACTIVE)) || []; }
+        catch { return []; }
+      });
+      const [articles,     setArticles]     = useState([]);
+      const [fetching,     setFetching]     = useState(false);
+      const [error,        setError]        = useState('');
+      const [openArticle,  setOpenArticle]  = useState(null);
+      const [showSettings, setShowSettings] = useState(false);
+      const [tagInput,     setTagInput]     = useState('');
+      const [showTagInput, setShowTagInput] = useState(false);
+
+      const runRef = useRef(0); // stale-request guard
+
+      /* ── Load news + background rewrites ─────────────────────────── */
+      const loadNews = useCallback(async () => {
+        if (!active.length) return;
+        const gKey  = localStorage.getItem(LS.G_KEY);
+        const aiKey = localStorage.getItem(LS.AI_KEY);
+        const myRun = ++runRef.current;
+
+        setFetching(true);
+        setError('');
+        setArticles([]);
+        setOpenArticle(null);
+
+        try {
+          const activeTags = tags.filter(t => active.includes(t.id));
+          const results    = await Promise.all(activeTags.map(t => fetchTag(t, gKey)));
+          if (myRun !== runRef.current) return;
+
+          const seen  = new Set();
+          const cache = getCache();
+          const all   = results.flat()
+            .filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; })
+            .sort((a, b) => new Date(b.published) - new Date(a.published))
+            .map(a => cache[a.id] ? { ...a, ...cache[a.id], status: 'done' } : a);
+
+          if (myRun !== runRef.current) return;
+          setFetching(false);
+          setArticles(all);
+
+          /* ── Rewrite queue ── */
+          const toRewrite = all.filter(a => a.status === 'pending');
+          for (let i = 0; i < toRewrite.length; i += 3) {
+            if (myRun !== runRef.current) return;
+            const batch = toRewrite.slice(i, i + 3);
+
+            // Mark batch as loading
+            setArticles(prev => prev.map(a =>
+              batch.some(b => b.id === a.id) ? { ...a, status: 'loading' } : a
+            ));
+
+            await Promise.all(batch.map(async art => {
+              try {
+                const r = await rewriteArticle(art, aiKey);
+                if (myRun !== runRef.current) return;
+                setArticles(prev => prev.map(a =>
+                  a.id === art.id ? { ...a, titleIS: r.titleIS, summary: r.summary, full: r.full, status: 'done' } : a
+                ));
+              } catch {
+                if (myRun !== runRef.current) return;
+                setArticles(prev => prev.map(a =>
+                  a.id === art.id ? { ...a, status: 'error' } : a
+                ));
+              }
+            }));
+
+            if (i + 3 < toRewrite.length) await new Promise(r => setTimeout(r, 1500));
+          }
+        } catch (e) {
+          if (myRun !== runRef.current) return;
+          setFetching(false);
+          setError(e.message);
+        }
+      }, [active, tags]);
+
+      /* ── Sync open article when rewrite arrives ─────────────────── */
+      useEffect(() => {
+        if (!openArticle) return;
+        const updated = articles.find(a => a.id === openArticle.id);
+        if (updated && updated.status !== openArticle.status) setOpenArticle(updated);
+      }, [articles]);
+
+      /* ── Auto-load on tag change ─────────────────────────────────── */
+      useEffect(() => {
+        if (ready) loadNews();
+      }, [ready, active.join(',')]);
+
+      /* ── Persist prefs ───────────────────────────────────────────── */
+      useEffect(() => { localStorage.setItem(LS.ACTIVE, JSON.stringify(active)); }, [active]);
+      useEffect(() => { localStorage.setItem(LS.TAGS,   JSON.stringify(tags));   }, [tags]);
+
+      const toggleTag  = id => setActive(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+      const removeTag  = id => { setTags(p => p.filter(t => t.id !== id)); setActive(p => p.filter(x => x !== id)); };
+
+      const addTag = () => {
+        const name = tagInput.trim();
+        if (!name) return;
+        const id    = name.toLowerCase().replace(/\s+/g, '-');
+        if (tags.find(t => t.id === id)) return;
+        const color = COLOR_POOL[tags.length % COLOR_POOL.length];
+        setTags(p => [...p, { id, name, color, query: name }]);
+        setActive(p => [...p, id]);
+        setTagInput('');
+        setShowTagInput(false);
+      };
+
+      /* ── Progress ────────────────────────────────────────────────── */
+      const done    = articles.filter(a => a.status === 'done').length;
+      const total   = articles.length;
+      const rewriting = total > 0 && done < total;
+
+      if (!ready) return <SetupScreen onDone={() => setReady(true)} />;
+
+      return (
+        <div className="min-h-screen bg-gray-50">
+
+          {/* ── Header ──────────────────────────────────────────────── */}
+          <header className="bg-slate-900 sticky top-0 z-40">
+            <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">📰</span>
+                <div>
+                  <span className="text-white font-extrabold text-lg tracking-tight">Fréttir</span>
+                  {rewriting && (
+                    <span className="ml-2 text-xs text-slate-400">Simplifying {done}/{total}…</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={loadNews} disabled={fetching}
+                  title="Refresh"
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-40"
+                >
+                  <svg className={`w-5 h-5 ${fetching ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  title="Settings"
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* ── Tag bar ─────────────────────────────────────────────── */}
+          <div className="sticky top-14 z-30 bg-white border-b border-slate-100 shadow-sm">
+            <div className="max-w-5xl mx-auto px-4">
+              <div className="tag-bar flex items-center gap-2 overflow-x-auto py-3">
+                {tags.map(t => (
+                  <TagPill key={t.id} tag={t} active={active.includes(t.id)} onClick={() => toggleTag(t.id)} onRemove={removeTag} />
+                ))}
+
+                {showTagInput ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      autoFocus
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter')  addTag();
+                        if (e.key === 'Escape') setShowTagInput(false);
+                      }}
+                      placeholder="Topic name…"
+                      className="border border-blue-300 rounded-full px-3.5 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <button onClick={addTag} className="text-xs font-bold text-blue-600 hover:text-blue-800 px-1">Add</button>
+                    <button onClick={() => setShowTagInput(false)} className="text-xs text-slate-400 hover:text-slate-600 px-1">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowTagInput(true)}
+                    className="shrink-0 text-sm px-3.5 py-1.5 rounded-full border border-dashed border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-500 font-semibold transition"
+                  >
+                    + Add
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Main content ────────────────────────────────────────── */}
+          <main className="max-w-5xl mx-auto px-4 py-6">
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-5 text-sm text-red-700">
+                <strong>Something went wrong:</strong> {error}
+              </div>
+            )}
+
+            {!active.length ? (
+              <div className="text-center py-24 text-slate-400">
+                <div className="text-5xl mb-4">🗂️</div>
+                <p className="font-semibold text-slate-600 text-base">No topics selected</p>
+                <p className="text-sm mt-1">Pick a tag above to start reading</p>
+              </div>
+            ) : fetching ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => <Skeleton key={i} />)}
+              </div>
+            ) : !articles.length ? (
+              <div className="text-center py-24 text-slate-400">
+                <p className="text-sm">No articles found. Try different topics.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {articles.map(a => (
+                  <Card key={a.id} article={a} tags={tags} onOpen={setOpenArticle} />
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* ── Modals ──────────────────────────────────────────────── */}
+          {openArticle  && <ArticleModal article={openArticle} onClose={() => setOpenArticle(null)} />}
+          {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onRefresh={loadNews} />}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
