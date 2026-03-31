@@ -22,54 +22,54 @@ export default function SetupScreen({ onDone }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#3A5615] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur mb-4 text-3xl">📰</div>
-          <h1 className="text-4xl font-extrabold text-white tracking-tight">Fréttir</h1>
-          <p className="text-slate-400 mt-2 text-sm">Heimsfréttir á einfalda íslensku</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[rgba(172,198,83,0.2)] mb-4 text-3xl">📰</div>
+          <h1 className="font-serif text-4xl font-bold text-[#FAF3EC] tracking-tight">Fréttir</h1>
+          <p className="text-[rgba(250,243,236,0.55)] mt-2 text-sm">Heimsfréttir á einfalda íslensku</p>
         </div>
 
         <div className="bg-white rounded-2xl p-6 shadow-2xl space-y-5">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Guardian API lykill</label>
+            <label className="block text-[10px] font-bold text-[rgba(58,86,21,0.5)] uppercase tracking-widest mb-2">Guardian API lykill</label>
             <input
               type="password" value={gKey} onChange={e => setGKey(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && submit()}
               placeholder="Límdu lykilinn hér"
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+              className="w-full border border-[rgba(58,86,21,0.12)] rounded-xl px-4 py-2.5 text-sm text-[#3A5615] placeholder-[rgba(58,86,21,0.3)] focus:outline-none focus:ring-2 focus:ring-[#ACC653] transition"
             />
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-[rgba(58,86,21,0.4)] mt-1.5">
               Ókeypis lykill →{' '}
-              <a href="https://open-platform.theguardian.com/access/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              <a href="https://open-platform.theguardian.com/access/" target="_blank" rel="noopener noreferrer" className="text-[#3A5615] hover:underline font-medium">
                 open-platform.theguardian.com
               </a>
             </p>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Gemini API lykill</label>
+            <label className="block text-[10px] font-bold text-[rgba(58,86,21,0.5)] uppercase tracking-widest mb-2">Gemini API lykill</label>
             <input
               type="password" value={aiKey} onChange={e => setAiKey(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && submit()}
               placeholder="Límdu lykilinn hér"
-              className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition"
+              className="w-full border border-[rgba(58,86,21,0.12)] rounded-xl px-4 py-2.5 text-sm text-[#3A5615] placeholder-[rgba(58,86,21,0.3)] focus:outline-none focus:ring-2 focus:ring-[#ACC653] transition"
             />
-            <p className="text-xs text-slate-400 mt-1.5">
+            <p className="text-xs text-[rgba(58,86,21,0.4)] mt-1.5">
               Ókeypis lykill →{' '}
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-[#3A5615] hover:underline font-medium">
                 aistudio.google.com
               </a>
             </p>
           </div>
 
           {err && (
-            <div className="bg-red-50 text-red-600 text-xs rounded-xl px-4 py-2.5 border border-red-100">{err}</div>
+            <div className="bg-[rgba(237,166,191,0.12)] text-[#b05080] text-xs rounded-xl px-4 py-2.5 border border-[rgba(237,166,191,0.4)]">{err}</div>
           )}
 
           <button
             onClick={submit} disabled={!gKey || !aiKey || loading}
-            className="w-full bg-slate-900 hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold py-3 rounded-xl transition text-sm"
+            className="w-full bg-[#3A5615] hover:bg-[#4a6b1e] disabled:bg-[rgba(58,86,21,0.08)] disabled:text-[rgba(58,86,21,0.3)] text-[#FAF3EC] font-bold py-3 rounded-xl transition text-sm"
           >
             {loading ? 'Athuga lykla…' : 'Byrja að lesa →'}
           </button>

@@ -251,19 +251,19 @@ export default function App() {
   if (!ready) return <SetupScreen onDone={() => setReady(true)} />;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#FAF3EC]">
 
       {/* ── Header ──────────────────────────────────────────────── */}
-      <header className="bg-slate-900 sticky top-0 z-40">
+      <header className="bg-[#3A5615] sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="text-xl">📰</span>
             <div>
-              <span className="text-white font-extrabold text-lg tracking-tight">Fréttir</span>
+              <span className="font-serif text-[#FAF3EC] font-bold text-lg tracking-tight">Fréttir</span>
               {rewriting && (
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-[rgba(250,243,236,0.55)]">
                   Þýði {done}/{total}…
-                  {etaText && <span className="ml-1.5 text-slate-500">{etaText}</span>}
+                  {etaText && <span className="ml-1.5 text-[rgba(250,243,236,0.35)]">{etaText}</span>}
                 </span>
               )}
             </div>
@@ -272,7 +272,7 @@ export default function App() {
             <button
               onClick={loadNews} disabled={fetching}
               title="Endurhlaða"
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-40"
+              className="p-2 rounded-lg text-[rgba(250,243,236,0.55)] hover:text-[#FAF3EC] hover:bg-[rgba(250,243,236,0.1)] transition disabled:opacity-40"
             >
               <svg className={`w-5 h-5 ${fetching ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -281,7 +281,7 @@ export default function App() {
             <button
               onClick={() => setShowSettings(true)}
               title="Stillingar"
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="p-2 rounded-lg text-[rgba(250,243,236,0.55)] hover:text-[#FAF3EC] hover:bg-[rgba(250,243,236,0.1)] transition"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -293,12 +293,12 @@ export default function App() {
       </header>
 
       {/* ── Tag bar ─────────────────────────────────────────────── */}
-      <div className="sticky top-14 z-30 bg-white border-b border-slate-100 shadow-sm">
+      <div className="sticky top-14 z-30 bg-[#FAF3EC]/90 backdrop-blur-md border-b border-[rgba(58,86,21,0.08)]">
         <div className="max-w-5xl mx-auto px-4">
           <div className="tag-bar flex items-center gap-2 overflow-x-auto py-3">
             <button
               onClick={toggleAll}
-              className={`shrink-0 text-sm font-semibold px-3.5 py-1.5 rounded-full border transition ${allActive ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-500'}`}
+              className={`shrink-0 text-sm font-bold px-3.5 py-1.5 rounded-full transition ${allActive ? 'bg-[#3A5615] text-[#FAF3EC]' : 'bg-white text-[rgba(58,86,21,0.5)] border border-[rgba(58,86,21,0.12)] hover:border-[rgba(58,86,21,0.25)]'}`}
             >
               Allt
             </button>
@@ -317,15 +317,15 @@ export default function App() {
                     if (e.key === 'Escape') setShowTagInput(false);
                   }}
                   placeholder="Heiti flokks…"
-                  className="border border-blue-300 rounded-full px-3.5 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="border border-[rgba(58,86,21,0.2)] rounded-full px-3.5 py-1.5 text-sm w-32 text-[#3A5615] bg-white placeholder-[rgba(58,86,21,0.3)] focus:outline-none focus:ring-2 focus:ring-[#ACC653]"
                 />
-                <button onClick={addTag} className="text-xs font-bold text-blue-600 hover:text-blue-800 px-1">Bæta við</button>
-                <button onClick={() => setShowTagInput(false)} className="text-xs text-slate-400 hover:text-slate-600 px-1">✕</button>
+                <button onClick={addTag} className="text-xs font-bold text-[#3A5615] hover:text-[#5a7a1a] px-1">Bæta við</button>
+                <button onClick={() => setShowTagInput(false)} className="text-xs text-[rgba(58,86,21,0.3)] hover:text-[#3A5615] px-1">✕</button>
               </div>
             ) : (
               <button
                 onClick={() => setShowTagInput(true)}
-                className="shrink-0 text-sm px-3.5 py-1.5 rounded-full border border-dashed border-slate-300 text-slate-400 hover:border-blue-400 hover:text-blue-500 font-semibold transition"
+                className="shrink-0 text-sm px-3.5 py-1.5 rounded-full border border-dashed border-[rgba(58,86,21,0.2)] text-[rgba(58,86,21,0.4)] hover:border-[rgba(58,86,21,0.4)] hover:text-[#3A5615] font-bold transition"
               >
                 + Bæta við
               </button>
@@ -338,15 +338,15 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-4 py-6">
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-5 text-sm text-red-700">
+          <div className="bg-[rgba(237,166,191,0.12)] border border-[rgba(237,166,191,0.4)] rounded-xl px-4 py-3 mb-5 text-sm text-[#b05080]">
             <strong>Villa:</strong> {error}
           </div>
         )}
 
         {!active.length ? (
-          <div className="text-center py-24 text-slate-400">
+          <div className="text-center py-24 text-[rgba(58,86,21,0.4)]">
             <div className="text-5xl mb-4">🗂️</div>
-            <p className="font-semibold text-slate-600 text-base">Ekkert efni valið</p>
+            <p className="font-bold text-[#3A5615] text-base">Ekkert efni valið</p>
             <p className="text-sm mt-1">Veldu flokk hér að ofan til að byrja að lesa</p>
           </div>
         ) : fetching ? (
@@ -354,7 +354,7 @@ export default function App() {
             {[...Array(6)].map((_, i) => <Skeleton key={i} />)}
           </div>
         ) : !articles.length ? (
-          <div className="text-center py-24 text-slate-400">
+          <div className="text-center py-24 text-[rgba(58,86,21,0.4)]">
             <p className="text-sm">Engar greinar fundust. Prófaðu önnur efnisflokk.</p>
           </div>
         ) : (
