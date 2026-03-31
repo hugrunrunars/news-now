@@ -248,6 +248,14 @@ export default function App() {
       : `~${Math.ceil(etaMs / 1000)} sek eftir`
     : null;
 
+  const greeting = (() => {
+    const hour = new Date(new Date().toLocaleString('en-US', { timeZone: 'Atlantic/Reykjavik' })).getHours();
+    if (hour >= 5 && hour < 12)  return 'Góðan daginn';
+    if (hour >= 12 && hour < 18) return 'Gott síðdegi';
+    if (hour >= 18 && hour < 22) return 'Gott kvöld';
+    return 'Góða nótt';
+  })();
+
   if (!ready) return <SetupScreen onDone={() => setReady(true)} />;
 
   return (
@@ -259,9 +267,12 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             <span className="text-xl">📰</span>
             <div>
-              <span className="font-serif text-[#FAF3EC] font-bold text-lg tracking-tight">Fréttir</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif text-[#FAF3EC] font-bold text-lg tracking-tight">Fréttir</span>
+                <span className="text-sm text-[rgba(250,243,236,0.55)] font-light">{greeting}, Hugrún</span>
+              </div>
               {rewriting && (
-                <span className="ml-2 text-xs text-[rgba(250,243,236,0.55)]">
+                <span className="text-xs text-[rgba(250,243,236,0.55)]">
                   Þýði {done}/{total}…
                   {etaText && <span className="ml-1.5 text-[rgba(250,243,236,0.35)]">{etaText}</span>}
                 </span>
