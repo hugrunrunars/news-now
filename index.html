@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fréttir — News, Simplified</title>
+  <title>Fréttir — Fréttir á íslensku</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -49,7 +49,15 @@
       CACHE:  'frettir_cache',
     };
 
-    const PRESET_TAGS = [];
+    const PRESET_TAGS = [
+      { id: 'world',       name: 'World',       color: 'blue',    section: 'world' },
+      { id: 'technology',  name: 'Technology',   color: 'violet',  section: 'technology' },
+      { id: 'science',     name: 'Science',      color: 'emerald', section: 'science' },
+      { id: 'sport',       name: 'Sport',        color: 'amber',   section: 'sport' },
+      { id: 'environment', name: 'Environment',  color: 'teal',    section: 'environment' },
+      { id: 'culture',     name: 'Culture',      color: 'rose',    section: 'culture' },
+      { id: 'business',    name: 'Business',     color: 'indigo',  section: 'business' },
+    ];
 
     const COLOR_POOL = ['blue','violet','emerald','amber','cyan','rose','red','orange','teal','indigo','pink','lime'];
 
@@ -145,7 +153,7 @@ Title: ${article.title}
 Text: ${article.body || article.trail}`;
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${aiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -199,7 +207,7 @@ Text: ${article.body || article.trail}`;
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur mb-4 text-3xl">📰</div>
               <h1 className="text-4xl font-extrabold text-white tracking-tight">Fréttir</h1>
-              <p className="text-slate-400 mt-2 text-sm">Your personal news, simplified</p>
+              <p className="text-slate-400 mt-2 text-sm">Heimsfréttir á einfalda íslensku</p>
             </div>
 
             <div className="bg-white rounded-2xl p-6 shadow-2xl space-y-5">
@@ -305,6 +313,7 @@ Text: ${article.body || article.trail}`;
       const tag    = tags.find(t => t.id === article.tagId) || { color: 'blue', name: article.tagName };
       const style  = C[tag.color] || C.blue;
       const isWaiting = article.status === 'pending' || article.status === 'loading';
+      const isError   = article.status === 'error';
       const text   = article.summary || article.trail;
 
       return (
@@ -314,6 +323,9 @@ Text: ${article.body || article.trail}`;
             <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${style.chip}`}>{article.tagName}</span>
             {article.section && (
               <span className="text-xs text-slate-400 truncate max-w-[120px]">{article.section}</span>
+            )}
+            {isError && (
+              <span className="text-xs text-amber-500 font-medium">⚠ Translation failed</span>
             )}
           </div>
 
@@ -494,8 +506,12 @@ Text: ${article.body || article.trail}`;
         catch { return PRESET_TAGS; }
       });
       const [active, setActive] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(LS.ACTIVE)) || []; }
-        catch { return []; }
+        try {
+          const saved = JSON.parse(localStorage.getItem(LS.ACTIVE));
+          if (saved !== null) return saved;
+          // Auto-select first two tags on first run
+          return PRESET_TAGS.slice(0, 2).map(t => t.id);
+        } catch { return PRESET_TAGS.slice(0, 2).map(t => t.id); }
       });
       const [articles,     setArticles]     = useState([]);
       const [fetching,     setFetching]     = useState(false);
@@ -553,7 +569,8 @@ Text: ${article.body || article.trail}`;
                 setArticles(prev => prev.map(a =>
                   a.id === art.id ? { ...a, titleIS: r.titleIS, summary: r.summary, full: r.full, status: 'done' } : a
                 ));
-              } catch {
+              } catch (err) {
+                console.error('Gemini rewrite failed for', art.id, err);
                 if (myRun !== runRef.current) return;
                 setArticles(prev => prev.map(a =>
                   a.id === art.id ? { ...a, status: 'error' } : a
